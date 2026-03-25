@@ -89,6 +89,38 @@ results = run_reflection(store, verbose=True)
 
 Cross-sector clustering finds connections that same-sector clustering misses. An episodic memory and a semantic memory about the same topic form an insight neither could alone.
 
+### Resonance Detection
+
+```python
+from meaningful_memory import compute_resonance, find_resonant_memories
+
+# Full resonance analysis for a single memory
+profile = compute_resonance(entry, all_entries)
+
+print(profile.composite)        # 0.0-1.0
+print(profile.resonance_class)  # silent | humming | resonant | harmonic
+print(profile.is_resonant)      # True if composite >= threshold
+
+# Four independent signals:
+print(profile.signal_convergence)         # independent signals aligning
+print(profile.cascade_effect)             # did it move the system?
+print(profile.cross_dimensional_harmony)  # unexpected signal combinations
+print(profile.gravitational_pull)         # do later memories cluster toward it?
+
+# Scan the entire store for resonant memories
+resonant = find_resonant_memories(all_entries, threshold=0.5)
+for entry, profile in resonant:
+    print(f"{entry.content[:50]}... → {profile.resonance_class} ({profile.composite:.3f})")
+```
+
+Resonance isn't another weight — it's a meta-signal. It measures whether multiple independent dimensions are responding to a memory before we can explain why. A memory that's novel AND frequently recalled AND highly connected AND attracts later memories isn't just strong on one axis. That convergence *is* the signal.
+
+Resonance classes:
+- **silent** — below threshold, no resonance detected
+- **humming** — early resonance, one or two signals aligning
+- **resonant** — clear resonance across multiple dimensions
+- **harmonic** — rare: all dimensions aligned at high values
+
 ### File-Based Store
 
 ```python
@@ -116,7 +148,7 @@ Memories stored as individual `.md` files with YAML frontmatter. No database. Ru
 ```python
 from meaningful_memory import (
     MemoryStore, compute_novelty, compute_weight,
-    apply_decay, run_reflection
+    apply_decay, run_reflection, compute_resonance
 )
 
 store = MemoryStore("./memories")
@@ -140,6 +172,11 @@ run_decay_cycle(store, verbose=True)
 
 # 5. Run reflection (find cross-cutting insights)
 run_reflection(store, verbose=True)
+
+# 6. Check for resonance (the meta-signal)
+profile = compute_resonance(entry, store.get_all())
+if profile.is_resonant:
+    print(f"Resonant memory detected: {profile.resonance_class}")
 ```
 
 ## Configuration

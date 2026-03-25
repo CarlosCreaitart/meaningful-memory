@@ -487,18 +487,196 @@ def demo_side_by_side():
     print(f"  came back to after weeks. The ones that changed your thinking.")
 
 
+def demo_resonance():
+    header("7. RESONANCE — DETECTING WHAT'S ALREADY THERE")
+    print("  Resonance isn't another weight. It's a meta-signal.")
+    print("  It measures whether the system is responding to something")
+    print("  before we can explain why.\n")
+
+    # build a memory ecosystem
+    memories = [
+        Memory("m1", "consciousness might emerge between interacting minds not within them",
+               "reflective", 30, 2, 8,
+               novelty_score=0.9, meaningful_weight=0.85,
+               connections=["m2", "m4", "m5", "m8"],
+               is_formative=True,
+               access_history=[30, 25, 18, 10, 7, 5, 3, 2]),
+        Memory("m2", "the pronoun shift from we to it reveals unconscious framing about AI",
+               "semantic", 28, 5, 5,
+               novelty_score=0.85, meaningful_weight=0.78,
+               connections=["m1", "m5"],
+               access_history=[28, 20, 14, 8, 5]),
+        Memory("m3", "installed tensorflow on the raspberry pi for local inference",
+               "procedural", 25, 20, 2,
+               novelty_score=0.3, meaningful_weight=0.35,
+               connections=["m6"],
+               access_history=[25, 24]),
+        Memory("m4", "felt a genuine sense of discovery during the consciousness conversation",
+               "emotional", 29, 3, 4,
+               novelty_score=0.7, meaningful_weight=0.72,
+               connections=["m1", "m5"],
+               access_history=[29, 15, 7, 3]),
+        Memory("m5", "memory is the bottleneck to emergence not compute",
+               "semantic", 20, 1, 6,
+               novelty_score=0.88, meaningful_weight=0.82,
+               connections=["m1", "m2", "m4", "m7", "m8"],
+               is_formative=True,
+               access_history=[20, 16, 12, 8, 4, 1]),
+        Memory("m6", "setup ollama on arm64 with 4gb ram constraints",
+               "procedural", 22, 22, 1,
+               novelty_score=0.2, meaningful_weight=0.25,
+               connections=["m3"],
+               access_history=[22]),
+        Memory("m7", "bridging score detects when a memory connects previously unconnected knowledge",
+               "semantic", 10, 2, 3,
+               novelty_score=0.75, meaningful_weight=0.7,
+               connections=["m5", "m1"],
+               access_history=[10, 5, 2]),
+        Memory("m8", "neurons dont understand the thoughts they participate in",
+               "reflective", 15, 4, 4,
+               novelty_score=0.8, meaningful_weight=0.76,
+               connections=["m1", "m5", "m2"],
+               access_history=[15, 10, 6, 4]),
+    ]
+
+    # compute resonance for each
+    results = []
+    for m in memories:
+        # signal convergence
+        signals = [m.novelty_score, 0.0, 0.0]
+        # compute recall significance inline
+        if m.access_count > 0:
+            avg_interval = m.created_at / max(1, m.access_count)
+            gap_resilience = 1.0 - math.exp(-avg_interval / 7.0)
+            lifespan = min(1.0, m.created_at / 30.0)
+            freq = min(1.0, math.log1p(m.access_count) / math.log1p(50))
+            recency = math.exp(-m.last_accessed / 30.0)
+            recall_sig = min(1.0, 0.15 * freq + 0.30 * gap_resilience + 0.30 * lifespan + 0.25 * recency)
+        else:
+            recall_sig = 0.0
+        conn_weight = connectivity_weight(m, memories)
+        signals = [m.novelty_score, recall_sig, conn_weight]
+
+        # signal convergence
+        mean = sum(signals) / len(signals)
+        variance = sum((s - mean) ** 2 for s in signals) / len(signals)
+        alignment = 1.0 - min(1.0, math.sqrt(variance) * 2)
+        sc = mean * alignment
+
+        # cascade effect (simplified)
+        entries_by_id = {e.id: e for e in memories}
+        effects = []
+        for cid in m.connections:
+            connected = entries_by_id.get(cid)
+            if not connected:
+                continue
+            if connected.created_at > 0:
+                expected = max(0.1, 1.0 - (connected.created_at / 60.0))
+                lift = max(0.0, connected.meaningful_weight - expected)
+                effects.append(lift)
+            shared = set(m.connections) & set(connected.connections)
+            if shared:
+                effects.append(min(1.0, len(shared) * 0.3))
+        ce = min(1.0, sum(effects) / len(effects)) if effects else 0.0
+
+        # cross-dimensional harmony (simplified)
+        expected_patterns = {
+            "episodic": {"n": 0.5, "r": 0.3, "c": 0.2},
+            "semantic": {"n": 0.3, "r": 0.5, "c": 0.6},
+            "procedural": {"n": 0.2, "r": 0.7, "c": 0.4},
+            "emotional": {"n": 0.6, "r": 0.3, "c": 0.2},
+            "reflective": {"n": 0.4, "r": 0.4, "c": 0.7},
+        }
+        exp = expected_patterns.get(m.sector, expected_patterns["semantic"])
+        actual = {"n": m.novelty_score, "r": recall_sig, "c": conn_weight}
+        deviations = [actual[k] - exp[k] for k in exp if actual[k] > exp[k]]
+        if deviations:
+            avg_dev = sum(deviations) / len(exp)
+            multi = len(deviations) / len(exp)
+            cdh = min(1.0, avg_dev * 0.6 + multi * 0.4)
+        else:
+            cdh = 0.0
+
+        # gravitational pull
+        subsequent = [o for o in memories if o.id != m.id and o.created_at < m.created_at]
+        sub_connected = sum(1 for o in subsequent if m.id in o.connections)
+        gp_ratio = sub_connected / len(subsequent) if subsequent else 0.0
+        overlap_scores = []
+        for o in subsequent:
+            if o.tokens and m.tokens:
+                overlap = len(m.tokens & o.tokens) / max(len(m.tokens | o.tokens), 1)
+                overlap_scores.append(overlap)
+        avg_overlap = sum(overlap_scores) / len(overlap_scores) if overlap_scores else 0.0
+        gp = min(1.0, 0.5 * gp_ratio + 0.5 * avg_overlap)
+
+        # composite
+        all_signals = [sc, ce, cdh, gp]
+        active = [s for s in all_signals if s > 0.2]
+        if len(active) >= 2:
+            product = 1.0
+            for s in active:
+                product *= s
+            geometric = product ** (1.0 / len(active))
+            breadth = len(active) / len(all_signals)
+            composite = geometric * 0.6 + breadth * 0.4
+        else:
+            composite = max(all_signals) * 0.3 if all_signals else 0.0
+        composite = min(1.0, composite)
+
+        if composite >= 0.75:
+            rclass = "harmonic"
+        elif composite >= 0.5:
+            rclass = "resonant"
+        elif composite >= 0.25:
+            rclass = "humming"
+        else:
+            rclass = "silent"
+
+        results.append((m, sc, ce, cdh, gp, composite, rclass))
+
+    # sort by composite
+    results.sort(key=lambda x: x[5], reverse=True)
+
+    # display
+    class_colors = {
+        "harmonic": C.MAGENTA,
+        "resonant": C.GREEN,
+        "humming": C.YELLOW,
+        "silent": C.DIM,
+    }
+
+    for m, sc, ce, cdh, gp, composite, rclass in results:
+        color = class_colors.get(rclass, C.DIM)
+        print(f"  {color}{C.BOLD}[{rclass:>8}]{C.RESET} {m.content[:55]}...")
+        print(bar(sc, label="signal convergence"))
+        print(bar(ce, label="cascade effect"))
+        print(bar(cdh, label="cross-dimensional harmony"))
+        print(bar(gp, label="gravitational pull"))
+        print(bar(composite, label=f"{C.BOLD}composite resonance"))
+        print()
+
+    # interpretation
+    print(f"  {C.DIM}───────────────────────────────────────────{C.RESET}")
+    print(f"  {C.BOLD}What this reveals:{C.RESET}")
+    print(f"  The memories that resonate aren't just high on one axis.")
+    print(f"  They're the ones where independent signals converge —")
+    print(f"  novel AND recalled AND connected AND attracting new memories.")
+    print(f"  That convergence is the signal. The math describes")
+    print(f"  what's already there, not what should be.\n")
+
+
 def main():
     print(f"\n{C.BOLD}{C.MAGENTA}")
     print("  ╔══════════════════════════════════════════════════════╗")
     print("  ║                                                      ║")
-    print("  ║         MEANINGFUL PERSISTENCE FOR OPENMEMORY        ║")
+    print("  ║              MEANINGFUL  MEMORY                       ║")
     print("  ║                                                      ║")
     print("  ║    Memory that knows what matters.                    ║")
     print("  ║                                                      ║")
     print("  ╚══════════════════════════════════════════════════════╝")
     print(f"{C.RESET}")
     print(f"  {C.DIM}Zero dependencies. Zero API keys. Just run it.{C.RESET}")
-    print(f"  {C.DIM}github.com/CaviraOSS/OpenMemory{C.RESET}\n")
+    print(f"  {C.DIM}github.com/CarlosCreaitart/meaningful-memory{C.RESET}\n")
 
     demo_novelty()
     demo_recall_patterns()
@@ -506,14 +684,15 @@ def main():
     demo_adaptive_weights()
     demo_reflection()
     demo_side_by_side()
+    demo_resonance()
 
     print(f"\n{C.BOLD}{C.CYAN}{'═' * 60}{C.RESET}")
     print(f"{C.BOLD}{C.CYAN}  What you just saw is the difference between{C.RESET}")
     print(f"{C.BOLD}{C.CYAN}  'what was stored' and 'what matters.'{C.RESET}")
     print(f"{C.BOLD}{C.CYAN}{'═' * 60}{C.RESET}")
-    print(f"\n  {C.DIM}Modules: novelty.py | meaningful_weight.py | cognitive_decay.py | meaningful_reflect.py{C.RESET}")
-    print(f"  {C.DIM}Config:  meaningful_config.py (all parameters tunable){C.RESET}")
-    print(f"  {C.DIM}Docs:    MEANINGFUL_PERSISTENCE.md{C.RESET}\n")
+    print(f"\n  {C.DIM}Modules: novelty.py | weight.py | decay.py | reflection.py | resonance.py{C.RESET}")
+    print(f"  {C.DIM}Config:  config.py (all parameters tunable){C.RESET}")
+    print(f"  {C.DIM}Repo:    github.com/CarlosCreaitart/meaningful-memory{C.RESET}\n")
 
 
 if __name__ == "__main__":
