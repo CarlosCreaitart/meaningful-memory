@@ -44,6 +44,9 @@ class MemoryEntry:
     decay_state: str = "active"  # active, fading, trace
     consolidated: bool = False
 
+    # staleness tracking
+    verified_at: Optional[float] = None
+
     def __post_init__(self):
         if not self.id:
             self.id = str(uuid.uuid4())[:12]
@@ -101,6 +104,8 @@ class MemoryEntry:
         lines.append(f"is_formative: {self.is_formative}")
         lines.append(f"decay_state: {self.decay_state}")
         lines.append(f"consolidated: {self.consolidated}")
+        if self.verified_at is not None:
+            lines.append(f"verified_at: {self.verified_at}")
         if self.tags:
             lines.append(f"tags: {json.dumps(self.tags)}")
         if self.connections:
@@ -138,7 +143,8 @@ class MemoryEntry:
                     data[key] = []
             elif key in ("created_at", "last_accessed", "salience",
                          "meaningful_weight", "novelty_score",
-                         "recall_significance", "connectivity_weight"):
+                         "recall_significance", "connectivity_weight",
+                         "verified_at"):
                 try:
                     data[key] = float(value)
                 except ValueError:
@@ -165,17 +171,20 @@ class MemoryStore:
         ├── active/         # living memories
         ├── fading/         # low-salience, archived
         ├── reflections/    # generated insights
+        ├── pruned/         # deduplicated (never hard-deleted)
         └── index.json      # lightweight index
     """
 
-    def __init__(self, path: str = "./memories"):
+    def __init__(self, path: str = "./memories", config=None):
         self.path = Path(path)
+        self._config = config
         self._ensure_dirs()
         self._index: Dict[str, dict] = {}
         self._load_index()
+        self._consolidating = False
 
     def _ensure_dirs(self):
-        for subdir in ["active", "fading", "reflections"]:
+        for subdir in ["active", "fading", "reflections", "pruned"]:
             (self.path / subdir).mkdir(parents=True, exist_ok=True)
 
     def _index_path(self) -> Path:
@@ -239,7 +248,31 @@ class MemoryStore:
         }
         self._save_index()
 
+        self._check_consolidation()
+
         return entry
+
+    def _check_consolidation(self):
+        """Auto-trigger consolidation if store approaches capacity."""
+        if self._consolidating:
+            return
+        if self._config is None:
+            return
+
+        store_cfg = self._config.store
+        if not store_cfg.auto_consolidate:
+            return
+
+        active_count = sum(1 for v in self._index.values() if v["state"] == "active")
+        trigger_count = int(store_cfg.max_active_memories * store_cfg.consolidation_trigger)
+
+        if active_count >= trigger_count:
+            self._consolidating = True
+            try:
+                from .reflection import run_full_reflection
+                run_full_reflection(self, self._config)
+            finally:
+                self._consolidating = False
 
     def get(self, memory_id: str) -> Optional[MemoryEntry]:
         """Retrieve a memory by ID."""
@@ -317,6 +350,44 @@ class MemoryStore:
 
         scored.sort(key=lambda x: x[1], reverse=True)
         return [entry for entry, _ in scored[:limit]]
+
+    def verify(self, memory_id: str) -> Optional[MemoryEntry]:
+        """Mark a memory as verified against current state."""
+        entry = self.get(memory_id)
+        if not entry:
+            return None
+        entry.verified_at = time.time()
+        self.update(entry)
+        return entry
+
+    def get_stale(self, threshold_days: int = 30) -> List[MemoryEntry]:
+        """Return active memories not verified within threshold."""
+        now = time.time()
+        threshold_seconds = threshold_days * 86400
+        stale = []
+        for entry in self.get_all("active", limit=500):
+            if entry.verified_at is None:
+                if (now - entry.created_at) > threshold_seconds:
+                    stale.append(entry)
+            elif (now - entry.verified_at) > threshold_seconds:
+                stale.append(entry)
+        return stale
+
+    def move_to_pruned(self, memory_id: str):
+        """Move a memory to the pruned directory (never hard-deleted)."""
+        info = self._index.get(memory_id)
+        if not info:
+            return
+
+        old_path = self.path / info["file"]
+        new_path = self.path / "pruned" / f"{memory_id}.md"
+
+        if old_path.exists():
+            new_path.write_text(old_path.read_text())
+            old_path.unlink()
+
+        del self._index[memory_id]
+        self._save_index()
 
     def connect(self, id_a: str, id_b: str):
         """Create a bidirectional connection between two memories."""

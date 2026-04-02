@@ -665,13 +665,146 @@ def demo_resonance():
     print(f"  what's already there, not what should be.\n")
 
 
+def demo_duplicate_pruning():
+    header("8. DUPLICATE PRUNING")
+    print("  Five memories expressing the same insight at different times")
+    print("  shouldn't all persist. Consolidate into one, keep the richest.\n")
+
+    memories = [
+        Memory("d1", "consciousness might emerge between interacting minds not within them",
+               "reflective", 30, 2, 8, meaningful_weight=0.85, is_formative=True,
+               connections=["d3", "d4"]),
+        Memory("d2", "consciousness could emerge between interacting minds rather than within them",
+               "reflective", 20, 5, 3, meaningful_weight=0.6,
+               connections=["d5"]),
+        Memory("d3", "awareness may emerge between minds interacting together not within individual ones",
+               "semantic", 10, 3, 2, meaningful_weight=0.4,
+               connections=["d1"]),
+        Memory("d4", "the pronoun shift from we to it reveals unconscious framing about AI",
+               "semantic", 28, 5, 5, meaningful_weight=0.78),
+        Memory("d5", "memory is the bottleneck to emergence not compute",
+               "semantic", 20, 1, 6, meaningful_weight=0.82),
+    ]
+
+    # show similarity scores
+    print(f"  {C.BOLD}Similarity scan:{C.RESET}\n")
+    pairs = []
+    for i in range(len(memories)):
+        for j in range(i + 1, len(memories)):
+            a, b = memories[i], memories[j]
+            ta, tb = a.tokens, b.tokens
+            if ta and tb:
+                sim = len(ta & tb) / len(ta | tb)
+                if sim > 0.3:
+                    pairs.append((a, b, sim))
+
+    for a, b, sim in sorted(pairs, key=lambda x: x[2], reverse=True):
+        is_dup = sim >= 0.5
+        color = C.RED if is_dup else C.YELLOW
+        label = "DUPLICATE" if is_dup else "related"
+        print(f"  {color}[{label}]{C.RESET} sim={sim:.3f}")
+        print(f"    [{a.id}] \"{a.content[:55]}...\"")
+        print(f"    [{b.id}] \"{b.content[:55]}...\"")
+        print()
+
+    print(f"  {C.BOLD}After pruning:{C.RESET}")
+    print(f"  Anchor [{C.GREEN}d1{C.RESET}] survives (highest weight, formative)")
+    print(f"  Duplicates [{C.RED}d2{C.RESET}], [{C.RED}d3{C.RESET}] merged into anchor")
+    print(f"  Connections from d2 and d3 folded into d1")
+    print(f"  d2, d3 moved to {C.DIM}pruned/{C.RESET} — never deleted")
+    print(f"\n  {C.DIM}If ANY duplicate is formative, the survivor stays formative.{C.RESET}")
+    print(f"  {C.DIM}Nothing is lost. Everything is preserved.{C.RESET}\n")
+
+
+def demo_contradiction():
+    header("9. CONTRADICTION DETECTION")
+    print("  Two memories about the same topic that disagree should be")
+    print("  surfaced, not silently coexist. We surface — not auto-resolve.\n")
+
+    contradictions = [
+        {
+            "a": "spaced repetition is effective for long-term memory retention",
+            "b": "spaced repetition is not effective for long-term memory retention",
+            "topic": "memory, repetition, spaced",
+            "confidence": 0.82,
+            "method": "negation detected: 'not' in B, absent in A",
+        },
+        {
+            "a": "deep learning models improve classification accuracy over baselines",
+            "b": "deep learning models worsen classification accuracy compared to baselines",
+            "topic": "accuracy, classification, learning, models",
+            "confidence": 0.71,
+            "method": "antonym pair: 'improve' vs 'worsen'",
+        },
+    ]
+
+    for c in contradictions:
+        conf_color = C.RED if c["confidence"] > 0.7 else C.YELLOW
+        print(f"  {conf_color}{C.BOLD}Contradiction (confidence={c['confidence']:.2f}){C.RESET}")
+        print(f"  Topic: {C.CYAN}{c['topic']}{C.RESET}")
+        print(f"    A: \"{c['a']}\"")
+        print(f"    B: \"{c['b']}\"")
+        print(f"  Detection: {C.DIM}{c['method']}{C.RESET}")
+        print()
+
+    print(f"  {C.DIM}───────────────────────────────────────────{C.RESET}")
+    print(f"  {C.BOLD}Key design decision:{C.RESET}")
+    print(f"  Contradictions are {C.UNDERLINE}surfaced{C.RESET}, not auto-resolved.")
+    print(f"  The higher-resonance memory is suggested — but the user decides.")
+    print(f"  Automatic resolution is maintenance. Surfacing is meaning.\n")
+
+
+def demo_four_phase():
+    header("10. FOUR-PHASE REFLECTION CYCLE")
+    print("  The system's sleep — now in four phases.\n")
+
+    phases = [
+        ("Orient", C.CYAN, [
+            "Scanned 247 active memories, 31 fading",
+            "Mapped 12 clusters across 5 sectors",
+            "Average weight: 0.42",
+        ]),
+        ("Signal", C.YELLOW, [
+            "Scored 247 memories by weight, resonance, access",
+            "38 high-value (resonant + formative)",
+            "15 low-value (no connections, no accesses)",
+            "22 stale (not verified in 30+ days)",
+        ]),
+        ("Consolidate", C.GREEN, [
+            "Pruned 8 duplicates into 3 anchors",
+            "Detected 2 contradictions (surfaced for review)",
+            "Generated 7 cross-sector insights",
+            "Marked 7 anchors as formative",
+        ]),
+        ("Prune & Index", C.MAGENTA, [
+            "Moved 15 low-signal memories to fading",
+            "Active count: 247 → 224 (under 500 limit)",
+            "Rebuilt index",
+        ]),
+    ]
+
+    for i, (name, color, details) in enumerate(phases, 1):
+        print(f"  {color}{C.BOLD}Phase {i}: {name}{C.RESET}")
+        for detail in details:
+            print(f"    {C.DIM}{detail}{C.RESET}")
+        print()
+
+    print(f"  {C.DIM}───────────────────────────────────────────{C.RESET}")
+    print(f"  {C.BOLD}What changed from v0.2.0:{C.RESET}")
+    print(f"  Single-pass reflection → four distinct phases")
+    print(f"  Each phase has its own report and can be run independently")
+    print(f"  Maintenance (pruning, staleness) + Meaning (insights, resonance)")
+    print(f"  Combined. Not competing.\n")
+
+
 def main():
     print(f"\n{C.BOLD}{C.MAGENTA}")
     print("  ╔══════════════════════════════════════════════════════╗")
     print("  ║                                                      ║")
-    print("  ║              MEANINGFUL  MEMORY                       ║")
+    print("  ║              MEANINGFUL  MEMORY  v0.3.0               ║")
     print("  ║                                                      ║")
     print("  ║    Memory that knows what matters.                    ║")
+    print("  ║    Now with maintenance that respects meaning.        ║")
     print("  ║                                                      ║")
     print("  ╚══════════════════════════════════════════════════════╝")
     print(f"{C.RESET}")
@@ -685,12 +818,16 @@ def main():
     demo_reflection()
     demo_side_by_side()
     demo_resonance()
+    demo_duplicate_pruning()
+    demo_contradiction()
+    demo_four_phase()
 
     print(f"\n{C.BOLD}{C.CYAN}{'═' * 60}{C.RESET}")
     print(f"{C.BOLD}{C.CYAN}  What you just saw is the difference between{C.RESET}")
     print(f"{C.BOLD}{C.CYAN}  'what was stored' and 'what matters.'{C.RESET}")
     print(f"{C.BOLD}{C.CYAN}{'═' * 60}{C.RESET}")
     print(f"\n  {C.DIM}Modules: novelty.py | weight.py | decay.py | reflection.py | resonance.py{C.RESET}")
+    print(f"  {C.DIM}         pruning.py | contradiction.py | store.py | config.py{C.RESET}")
     print(f"  {C.DIM}Config:  config.py (all parameters tunable){C.RESET}")
     print(f"  {C.DIM}Repo:    github.com/CarlosCreaitart/meaningful-memory{C.RESET}\n")
 

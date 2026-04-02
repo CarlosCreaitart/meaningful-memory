@@ -14,13 +14,25 @@ Current AI memory systems store everything the same way. A debugging session and
 
 Human memory doesn't work this way. It encodes with emotion, strengthens through spaced recall, connects across domains, and lets unimportant things fade. We need the AI equivalent.
 
+## What's New in v0.3.0
+
+v0.3.0 adds **operational hygiene** — the maintenance that keeps a memory store healthy at scale — without losing what makes this library different: meaning.
+
+- **Staleness Detection** — track whether memories have been verified against current state, not just accessed
+- **Duplicate Pruning** — consolidate near-duplicates, preserving the richest metadata on the survivor
+- **Contradiction Detection** — surface disagreements between memories (not auto-resolve)
+- **Four-Phase Reflection** — orient → signal → consolidate → prune
+- **Size-Aware Store** — auto-consolidation when approaching capacity limits
+
+Their system handles maintenance. Ours handles meaning. v0.3.0 combines both.
+
 ## See It Work
 
 ```bash
 python examples/demo.py
 ```
 
-Zero dependencies. Zero API keys. Instant visual proof of the difference between flat memory and meaningful memory.
+Zero dependencies. Zero API keys. 10 interactive demonstrations showing novelty, recall, decay, reflection, resonance, pruning, contradiction detection, and the full four-phase cycle.
 
 ## Core Modules
 
@@ -79,12 +91,25 @@ Memories fade through stages: **active → fading → trace**. Never hard-delete
 ### Meaningful Reflection
 
 ```python
-from meaningful_memory import run_reflection
+from meaningful_memory import run_reflection, run_full_reflection
 
-# The system's "sleep" — finds cross-cutting insights
+# Backward-compatible single-pass reflection
 results = run_reflection(store, verbose=True)
-# → "Cross-sector insight (episodic + semantic + reflective):
-#     5 memories converge on consciousness as emergent phenomenon..."
+
+# New in v0.3.0: Full four-phase reflection cycle
+from meaningful_memory import MeaningfulConfig
+config = MeaningfulConfig()
+report = run_full_reflection(store, config=config, verbose=True)
+
+# Phase 1: Orient  — scan store health, map clusters
+# Phase 2: Signal  — score all memories, flag stale entries
+# Phase 3: Consolidate — prune duplicates, detect contradictions, generate insights
+# Phase 4: Prune & Index — move low-value to fading, enforce limits
+
+print(report.orientation.active)           # active memory count
+print(report.consolidation.duplicates_pruned)  # duplicates merged
+print(report.consolidation.contradictions_found)
+print(report.moved_to_fading)              # low-value moved out
 ```
 
 Cross-sector clustering finds connections that same-sector clustering misses. An episodic memory and a semantic memory about the same topic form an insight neither could alone.
@@ -121,12 +146,61 @@ Resonance classes:
 - **resonant** — clear resonance across multiple dimensions
 - **harmonic** — rare: all dimensions aligned at high values
 
+### Duplicate Pruning
+
+```python
+from meaningful_memory import prune_duplicates
+
+report = prune_duplicates(store, verbose=True)
+print(f"Merged {report.memories_pruned} duplicates into {len(report.anchors)} anchors")
+
+# Dry run to preview without changing anything
+report = prune_duplicates(store, dry_run=True)
+```
+
+Near-duplicate memories are detected and consolidated. The highest-weighted version survives as the anchor. Connections, tags, and access history are merged. If any duplicate is formative, the survivor stays formative. Pruned entries are moved to `pruned/` — never deleted.
+
+### Contradiction Detection
+
+```python
+from meaningful_memory import detect_contradictions
+
+contradictions = detect_contradictions(store, verbose=True)
+for c in contradictions:
+    print(f"Conflict on [{c.topic}]: {c.memory_a_id} vs {c.memory_b_id}")
+    print(f"  Confidence: {c.confidence:.2f}")
+    print(f"  Suggested keep: {c.suggested_keep}")
+```
+
+Contradictions are **surfaced, not auto-resolved**. Two memories about the same topic that disagree are flagged with a confidence score. The higher-resonance memory is suggested — but the user or system decides. Automatic resolution is maintenance. Surfacing is meaning.
+
+### Staleness Detection
+
+```python
+# Mark a memory as verified against current state
+store.verify(entry.id)
+
+# Find memories not verified within threshold
+stale = store.get_stale(threshold_days=30)
+for entry in stale:
+    print(f"Stale: {entry.content[:50]}...")
+```
+
+A memory accessed yesterday but containing outdated information is stale. One accessed months ago but still true is not. Staleness tracks *verification*, not access.
+
 ### File-Based Store
 
 ```python
-from meaningful_memory import MemoryStore
+from meaningful_memory import MemoryStore, MeaningfulConfig
 
+# Basic store
 store = MemoryStore("./memories")
+
+# Size-aware store (auto-consolidates at capacity)
+config = MeaningfulConfig()
+config.store.max_active_memories = 500
+config.store.auto_consolidate = True
+store = MemoryStore("./memories", config=config)
 
 # Human-readable YAML+Markdown files
 entry = store.add(
@@ -141,17 +215,19 @@ store.connect(entry_a.id, entry_b.id)
 stats = store.stats()
 ```
 
-Memories stored as individual `.md` files with YAML frontmatter. No database. Runs on a Raspberry Pi.
+Memories stored as individual `.md` files with YAML frontmatter. Directory structure: `active/`, `fading/`, `reflections/`, `pruned/`. No database. Runs on a Raspberry Pi.
 
 ## Full Pipeline
 
 ```python
 from meaningful_memory import (
-    MemoryStore, compute_novelty, compute_weight,
-    apply_decay, run_reflection, compute_resonance
+    MemoryStore, MeaningfulConfig, compute_novelty, compute_weight,
+    apply_decay, run_full_reflection, compute_resonance,
+    prune_duplicates, detect_contradictions,
 )
 
-store = MemoryStore("./memories")
+config = MeaningfulConfig()
+store = MemoryStore("./memories", config=config)
 
 # 1. Store a memory
 entry = store.add("new insight about emergent consciousness")
@@ -170,13 +246,19 @@ store.update(entry)
 from meaningful_memory.decay import run_decay_cycle
 run_decay_cycle(store, verbose=True)
 
-# 5. Run reflection (find cross-cutting insights)
-run_reflection(store, verbose=True)
+# 5. Run four-phase reflection (the system's sleep)
+report = run_full_reflection(store, config=config, verbose=True)
 
 # 6. Check for resonance (the meta-signal)
 profile = compute_resonance(entry, store.get_all())
 if profile.is_resonant:
     print(f"Resonant memory detected: {profile.resonance_class}")
+
+# 7. Surface contradictions for review
+contradictions = detect_contradictions(store)
+
+# 8. Verify memories are still accurate
+store.verify(entry.id)
 ```
 
 ## Configuration
@@ -199,7 +281,30 @@ config.decay.base_stability_days = 5.0
 
 # Reflection: allow cross-sector clustering
 config.reflection.allow_cross_sector = True
+
+# Staleness: how many days before a memory is considered stale
+config.staleness.threshold_days = 30
+
+# Store: auto-consolidation limits
+config.store.max_active_memories = 500
+config.store.consolidation_trigger = 0.9
+config.store.auto_consolidate = True
+
+# Pruning: similarity threshold for duplicate detection
+config.pruning.similarity_threshold = 0.85
+
+# Contradiction: detection sensitivity
+config.contradiction.topic_similarity_threshold = 0.3
+config.contradiction.confidence_threshold = 0.5
 ```
+
+## Testing
+
+```bash
+python -m unittest discover tests/ -v
+```
+
+68 tests covering staleness, pruning, contradiction detection, four-phase reflection, size-aware store management, and all core modules.
 
 ## Framework Integration
 

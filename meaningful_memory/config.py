@@ -72,12 +72,44 @@ class ReflectionConfig:
 
 
 @dataclass
+class StalenessConfig:
+    """Controls staleness detection."""
+    threshold_days: int = 30
+    weight_penalty: float = 0.3
+
+
+@dataclass
+class StoreConfig:
+    """Controls store size management."""
+    max_active_memories: int = 500
+    consolidation_trigger: float = 0.9
+    auto_consolidate: bool = True
+
+
+@dataclass
+class PruningConfig:
+    """Controls duplicate pruning."""
+    similarity_threshold: float = 0.85
+
+
+@dataclass
+class ContradictionConfig:
+    """Controls contradiction detection."""
+    topic_similarity_threshold: float = 0.3
+    confidence_threshold: float = 0.5
+
+
+@dataclass
 class MeaningfulConfig:
     """Master configuration for all modules."""
     novelty: NoveltyConfig = field(default_factory=NoveltyConfig)
     weight: WeightConfig = field(default_factory=WeightConfig)
     decay: DecayConfig = field(default_factory=DecayConfig)
     reflection: ReflectionConfig = field(default_factory=ReflectionConfig)
+    staleness: StalenessConfig = field(default_factory=StalenessConfig)
+    store: StoreConfig = field(default_factory=StoreConfig)
+    pruning: PruningConfig = field(default_factory=PruningConfig)
+    contradiction: ContradictionConfig = field(default_factory=ContradictionConfig)
     enabled: bool = True
     verbose: bool = False
 
