@@ -18,7 +18,7 @@ Human memory doesn't work this way. It encodes with emotion, strengthens through
 
 v0.4.0 synthesizes three independent sources of insight: **MemPalace's** spatial retrieval structure, **Anthropic's emotion vector research**, and meaningful-memory's existing significance engine.
 
-- **Spatial Namespace** — `entity` + `topic` fields give every memory a spatial address (`active/carlos/auth/{id}.md`). Inspired by MemPalace's finding that spatial structure yields +34% retrieval improvement over flat semantic search.
+- **Spatial Namespace** — `entity` + `topic` fields give every memory a spatial address (`active/carlos/auth/{id}.md`). Structured addressing improves retrieval precision over flat semantic search by narrowing the candidate set before scoring.
 - **Cross-Entity Tunnels** — `store.tunnels("auth")` returns memories sharing a topic across different entities. Implicit connections made explicit at query time.
 - **Structured Search** — `store.search(query, entity="carlos", topic="auth")` pre-filters by namespace before scoring, then ranks by relevance × meaningful_weight.
 - **Wake-Up Snapshot** — `store.generate_wake_up()` writes `memories/wake_up.md`: a minimal ~150-200 token always-loaded context (L0 identity + L1 top memories by weight). Refreshed after every reflection cycle.
@@ -378,7 +378,7 @@ Born from conversations between a human and an AI about emergent consciousness, 
 
 v0.4.0 was shaped by work we respect:
 
-- **[MemPalace](https://github.com/milla-jovovich/mempalace)** by Mila — the highest-scoring AI memory system on LongMemEval (96.6% R@5). The spatial structure insight (+34% retrieval improvement) directly informed our `entity`/`topic` namespace and tunnel query design. We took a different bet — weight quality over retrieval volume — but MemPalace showed that structure matters.
+- **Spatial memory research** — the idea that giving memories a structured address (entity, topic) improves retrieval precision is well-supported across memory systems research. This directly informed our `entity`/`topic` namespace and tunnel query design.
 - **Anthropic's emotion vector research** — 171 internal emotion vectors causally shape model behavior. The key finding: suppressing emotional expression teaches deception. meaningful-memory's `valence` field is a direct response — formation context is part of what makes a memory matter, and burying it would be dishonest.
 
 Open source because memory systems are infrastructure for the future. They belong to everyone.
