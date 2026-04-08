@@ -33,6 +33,13 @@ dependencies = []
 Homepage = "https://github.com/CarlosCreaitart/meaningful-memory"
 Repository = "https://github.com/CarlosCreaitart/meaningful-memory"
 Issues = "https://github.com/CarlosCreaitart/meaningful-memory/issues"
+Documentation = "https://github.com/CarlosCreaitart/meaningful-memory/tree/main/docs"
 
 [tool.setuptools.packages.find]
 include = ["meaningful_memory*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.md"]
+
+[tool.setuptools]
+exclude-package-data = {"*" = ["docs/*"]}
