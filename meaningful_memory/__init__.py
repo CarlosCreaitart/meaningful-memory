@@ -32,7 +32,7 @@ from .resonance import compute_resonance, find_resonant_memories, ResonanceProfi
 from .pruning import prune_duplicates, PruneReport
 from .contradiction import detect_contradictions, ContradictionPair
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 __all__ = [
     "MeaningfulConfig",
     "default_config",
