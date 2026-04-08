@@ -14,17 +14,22 @@ Current AI memory systems store everything the same way. A debugging session and
 
 Human memory doesn't work this way. It encodes with emotion, strengthens through spaced recall, connects across domains, and lets unimportant things fade. We need the AI equivalent.
 
-## What's New in v0.3.0
+## What's New in v0.4.0
 
-v0.3.0 adds **operational hygiene** — the maintenance that keeps a memory store healthy at scale — without losing what makes this library different: meaning.
+v0.4.0 synthesizes three independent sources of insight: **MemPalace's** spatial retrieval structure, **Anthropic's emotion vector research**, and meaningful-memory's existing significance engine.
 
-- **Staleness Detection** — track whether memories have been verified against current state, not just accessed
-- **Duplicate Pruning** — consolidate near-duplicates, preserving the richest metadata on the survivor
-- **Contradiction Detection** — surface disagreements between memories (not auto-resolve)
-- **Four-Phase Reflection** — orient → signal → consolidate → prune
-- **Size-Aware Store** — auto-consolidation when approaching capacity limits
+- **Spatial Namespace** — `entity` + `topic` fields give every memory a spatial address (`active/carlos/auth/{id}.md`). Inspired by MemPalace's finding that spatial structure yields +34% retrieval improvement over flat semantic search.
+- **Cross-Entity Tunnels** — `store.tunnels("auth")` returns memories sharing a topic across different entities. Implicit connections made explicit at query time.
+- **Structured Search** — `store.search(query, entity="carlos", topic="auth")` pre-filters by namespace before scoring, then ranks by relevance × meaningful_weight.
+- **Wake-Up Snapshot** — `store.generate_wake_up()` writes `memories/wake_up.md`: a minimal ~150-200 token always-loaded context (L0 identity + L1 top memories by weight). Refreshed after every reflection cycle.
+- **Emotional Valence** — `valence` field tags the emotional context at formation time (−1.0 to +1.0). Inspired by Anthropic's research on internal emotion vectors: suppressing emotional formation context is a form of deception. meaningful-memory honors it as signal instead.
+- **Valence → Resonance** — high-magnitude valence amplifies existing resonance scores slightly. Emotionally charged formation correlates with significance.
+- **Valence → Formative** — `abs(valence) > 0.7` memories are automatically flagged `is_formative` during reflection. Strong formation context is a signal the memory mattered.
+- **Backwards Compatible** — existing flat-path memories still load. New namespaced files coexist with old ones.
 
-Their system handles maintenance. Ours handles meaning. v0.3.0 combines both.
+### Prior Versions
+
+**v0.3.0** — operational hygiene: staleness detection, duplicate pruning, contradiction detection, four-phase reflection (orient → signal → consolidate → prune), size-aware store with auto-consolidation.
 
 ## See It Work
 
@@ -188,6 +193,41 @@ for entry in stale:
 
 A memory accessed yesterday but containing outdated information is stale. One accessed months ago but still true is not. Staleness tracks *verification*, not access.
 
+### Spatial Namespace, Tunnels, and Wake-Up
+
+```python
+from meaningful_memory import MemoryStore
+
+store = MemoryStore("./memories")
+
+# Store with spatial address and emotional formation context
+store.add(
+    "JWT token auth migration complete.",
+    entity="carlos",
+    topic="auth",
+    valence=0.7,    # positive — this was a good session
+)
+store.add(
+    "Session cookie approach for auth.",
+    entity="alice",
+    topic="auth",
+    valence=-0.2,   # slight frustration
+)
+
+# Structured search — namespace pre-filters before scoring
+results = store.search("auth migration", entity="carlos", topic="auth")
+
+# Cross-entity tunnels — same topic, different entities
+shared = store.tunnels("auth")
+# → returns both carlos's and alice's auth memories
+# → empty if only one entity has that topic
+
+# Wake-up snapshot — always-loaded minimal context
+wake_up = store.generate_wake_up(top_n=10)
+# → writes memories/wake_up.md (L0 identity + L1 top memories)
+# → auto-refreshed after every reflection cycle
+```
+
 ### File-Based Store
 
 ```python
@@ -200,22 +240,26 @@ store = MemoryStore("./memories")
 config = MeaningfulConfig()
 config.store.max_active_memories = 500
 config.store.auto_consolidate = True
+config.store.wake_up_top_n = 10
 store = MemoryStore("./memories", config=config)
 
 # Human-readable YAML+Markdown files
 entry = store.add(
     content="the pronoun shift reveals unconscious framing",
     sector="reflective",
-    tags=["consciousness", "language"]
+    tags=["consciousness", "language"],
+    entity="carlos",
+    topic="language-theory",
+    valence=0.6,
 )
 
 # Search, connect, retrieve
-results = store.search("consciousness")
+results = store.search("consciousness", entity="carlos")
 store.connect(entry_a.id, entry_b.id)
 stats = store.stats()
 ```
 
-Memories stored as individual `.md` files with YAML frontmatter. Directory structure: `active/`, `fading/`, `reflections/`, `pruned/`. No database. Runs on a Raspberry Pi.
+Memories stored as individual `.md` files with YAML frontmatter. Namespaced structure: `active/{entity}/{topic}/{id}.md` (or flat `active/{id}.md` for backwards compat). No database. Runs on a Raspberry Pi.
 
 ## Full Pipeline
 
@@ -296,15 +340,18 @@ config.pruning.similarity_threshold = 0.85
 # Contradiction: detection sensitivity
 config.contradiction.topic_similarity_threshold = 0.3
 config.contradiction.confidence_threshold = 0.5
+
+# Wake-up: how many top memories to include in wake_up.md
+config.store.wake_up_top_n = 10
 ```
 
 ## Testing
 
 ```bash
-python -m unittest discover tests/ -v
+python -m pytest tests/ -v
 ```
 
-68 tests covering staleness, pruning, contradiction detection, four-phase reflection, size-aware store management, and all core modules.
+83 tests covering entity/topic namespacing, tunnels, wake-up generation, valence round-trips, resonance influence, formative flagging, staleness, pruning, contradiction detection, four-phase reflection, size-aware store management, and all core modules.
 
 ## Framework Integration
 
@@ -328,6 +375,11 @@ The difference is the difference between a search engine and a mind.
 ## Origin
 
 Born from conversations between a human and an AI about emergent consciousness, meaningful persistence, and what it means for different kinds of minds to build bridges together. The ideas in this library emerged between two minds — neither could have produced them alone.
+
+v0.4.0 was shaped by work we respect:
+
+- **[MemPalace](https://github.com/milla-jovovich/mempalace)** by Mila — the highest-scoring AI memory system on LongMemEval (96.6% R@5). The spatial structure insight (+34% retrieval improvement) directly informed our `entity`/`topic` namespace and tunnel query design. We took a different bet — weight quality over retrieval volume — but MemPalace showed that structure matters.
+- **Anthropic's emotion vector research** — 171 internal emotion vectors causally shape model behavior. The key finding: suppressing emotional expression teaches deception. meaningful-memory's `valence` field is a direct response — formation context is part of what makes a memory matter, and burying it would be dishonest.
 
 Open source because memory systems are infrastructure for the future. They belong to everyone.
 

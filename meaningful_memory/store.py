@@ -47,6 +47,11 @@ class MemoryEntry:
     # staleness tracking
     verified_at: Optional[float] = None
 
+    # v0.4.0 — spatial address + formation context
+    entity: str = ""      # person or project namespace (e.g. "carlos", "meaningful-memory")
+    topic: str = ""       # specific concept (e.g. "auth", "resonance", "book-outline")
+    valence: float = 0.0  # emotional context at formation: -1.0 (negative) to +1.0 (positive)
+
     def __post_init__(self):
         if not self.id:
             self.id = str(uuid.uuid4())[:12]
@@ -106,6 +111,12 @@ class MemoryEntry:
         lines.append(f"consolidated: {self.consolidated}")
         if self.verified_at is not None:
             lines.append(f"verified_at: {self.verified_at}")
+        if self.entity:
+            lines.append(f"entity: {self.entity}")
+        if self.topic:
+            lines.append(f"topic: {self.topic}")
+        if self.valence != 0.0:
+            lines.append(f"valence: {self.valence:.4f}")
         if self.tags:
             lines.append(f"tags: {json.dumps(self.tags)}")
         if self.connections:
@@ -144,7 +155,7 @@ class MemoryEntry:
             elif key in ("created_at", "last_accessed", "salience",
                          "meaningful_weight", "novelty_score",
                          "recall_significance", "connectivity_weight",
-                         "verified_at"):
+                         "verified_at", "valence"):
                 try:
                     data[key] = float(value)
                 except ValueError:
@@ -187,6 +198,17 @@ class MemoryStore:
         for subdir in ["active", "fading", "reflections", "pruned"]:
             (self.path / subdir).mkdir(parents=True, exist_ok=True)
 
+    def _entry_file_path(self, entry: "MemoryEntry", state: str = "active") -> Path:
+        """Determine namespaced file path for an entry."""
+        if entry.entity and entry.topic:
+            p = self.path / state / entry.entity / entry.topic / f"{entry.id}.md"
+        elif entry.entity:
+            p = self.path / state / entry.entity / f"{entry.id}.md"
+        else:
+            p = self.path / state / f"{entry.id}.md"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        return p
+
     def _index_path(self) -> Path:
         return self.path / "index.json"
 
@@ -211,7 +233,7 @@ class MemoryStore:
             dir_path = self.path / subdir
             if not dir_path.exists():
                 continue
-            for f in dir_path.glob("*.md"):
+            for f in dir_path.rglob("*.md"):  # rglob finds namespaced subdirs too
                 try:
                     entry = MemoryEntry.from_file_content(f.read_text())
                     self._index[entry.id] = {
@@ -220,6 +242,9 @@ class MemoryStore:
                         "salience": entry.salience,
                         "state": subdir,
                         "file": str(f.relative_to(self.path)),
+                        "entity": entry.entity,
+                        "topic": entry.topic,
+                        "valence": entry.valence,
                     }
                 except Exception:
                     continue
@@ -227,16 +252,22 @@ class MemoryStore:
 
     def add(self, content: str, sector: str = "semantic",
             tags: Optional[List[str]] = None,
-            metadata: Optional[Dict] = None) -> MemoryEntry:
+            metadata: Optional[Dict] = None,
+            entity: str = "",
+            topic: str = "",
+            valence: float = 0.0) -> MemoryEntry:
         """Store a new memory."""
         entry = MemoryEntry(
             content=content,
             sector=sector,
             tags=tags or [],
             metadata=metadata or {},
+            entity=entity,
+            topic=topic,
+            valence=valence,
         )
 
-        filepath = self.path / "active" / f"{entry.id}.md"
+        filepath = self._entry_file_path(entry, "active")
         filepath.write_text(entry.to_file_content())
 
         self._index[entry.id] = {
@@ -244,7 +275,10 @@ class MemoryStore:
             "weight": 0.0,
             "salience": entry.salience,
             "state": "active",
-            "file": f"active/{entry.id}.md",
+            "file": str(filepath.relative_to(self.path)),
+            "entity": entity,
+            "topic": topic,
+            "valence": valence,
         }
         self._save_index()
 
@@ -293,7 +327,8 @@ class MemoryStore:
         if not dir_path.exists():
             return entries
 
-        files = sorted(dir_path.glob("*.md"), key=lambda f: f.stat().st_mtime, reverse=True)
+        # rglob finds both flat active/{id}.md and namespaced active/{entity}/{topic}/{id}.md
+        files = sorted(dir_path.rglob("*.md"), key=lambda f: f.stat().st_mtime, reverse=True)
         for f in files[:limit]:
             try:
                 entries.append(MemoryEntry.from_file_content(f.read_text()))
@@ -313,6 +348,9 @@ class MemoryStore:
 
         self._index[entry.id]["weight"] = entry.meaningful_weight
         self._index[entry.id]["salience"] = entry.salience
+        self._index[entry.id]["entity"] = entry.entity
+        self._index[entry.id]["topic"] = entry.topic
+        self._index[entry.id]["valence"] = entry.valence
         self._save_index()
 
     def move_to_fading(self, memory_id: str):
@@ -332,24 +370,103 @@ class MemoryStore:
         self._index[memory_id]["file"] = f"fading/{memory_id}.md"
         self._save_index()
 
-    def search(self, query: str, limit: int = 10) -> List[MemoryEntry]:
+    def search(self, query: str, limit: int = 10,
+               entity: str = "", topic: str = "") -> List[MemoryEntry]:
         """
-        Simple token-overlap search.
+        Token-overlap search with optional entity/topic pre-filtering.
+
+        Filter order (mirrors MemPalace's +34% retrieval improvement):
+          1. Filter by entity if provided
+          2. Filter by topic if provided
+          3. Token-overlap score within filtered set
+          4. Sort by (relevance × meaningful_weight)
 
         For production use, integrate with an embedding provider.
         This is the fallback that works without any dependencies.
         """
         query_tokens = set(query.lower().split())
-        scored = []
+        candidates = self.get_all("active", limit=500)
 
-        for entry in self.get_all("active", limit=200):
+        # pre-filter by entity/topic if specified
+        if entity:
+            candidates = [e for e in candidates if e.entity == entity]
+        if topic:
+            candidates = [e for e in candidates if e.topic == topic]
+
+        scored = []
+        for entry in candidates:
             overlap = len(query_tokens & entry.tokens)
             if overlap > 0:
-                score = overlap / max(len(query_tokens), 1)
-                scored.append((entry, score))
+                relevance = overlap / max(len(query_tokens), 1)
+                # weight-aware ranking: relevance × (1 + meaningful_weight)
+                combined = relevance * (1.0 + entry.meaningful_weight)
+                scored.append((entry, combined))
 
         scored.sort(key=lambda x: x[1], reverse=True)
         return [entry for entry, _ in scored[:limit]]
+
+    def tunnels(self, topic: str) -> List[MemoryEntry]:
+        """
+        Return all memories sharing a topic across different entities.
+
+        Cross-entity tunnel query: makes implicit connections explicit
+        at query time. Returns results only when topic spans >1 entity.
+        """
+        results = []
+        seen_entities: set = set()
+
+        for entry in self.get_all("active", limit=500):
+            if entry.topic == topic and entry.entity:
+                results.append(entry)
+                seen_entities.add(entry.entity)
+
+        # only return if topic appears in more than one entity
+        if len(seen_entities) <= 1:
+            return []
+        return results
+
+    def generate_wake_up(self, top_n: int = 10) -> str:
+        """
+        Generate minimal always-loaded context snapshot (~150-200 tokens).
+
+        Writes to memories/wake_up.md and returns the content.
+        This is the L0+L1 layer: system identity + top memories by weight.
+        Regenerated after each reflection cycle.
+        """
+        all_entries = self.get_all("active", limit=500)
+        all_entries.sort(key=lambda e: e.meaningful_weight, reverse=True)
+        top = all_entries[:top_n]
+
+        lines = [
+            "# Wake-Up Context",
+            "<!-- Auto-generated. Refreshed after each reflection cycle. -->",
+            "",
+            "## L0 — System Identity",
+            "meaningful-memory: significance-aware AI memory. "
+            "Stores what matters and knows why. Never hard-deletes.",
+            "",
+            "## L1 — Top Memories",
+        ]
+
+        for entry in top:
+            weight_str = f"{entry.meaningful_weight:.3f}"
+            addr_parts = [p for p in [entry.entity, entry.topic] if p]
+            addr = f"[{'/'.join(addr_parts)}] " if addr_parts else ""
+            snippet = entry.content[:100].replace("\n", " ")
+            valence_str = f" val={entry.valence:+.2f}" if entry.valence != 0.0 else ""
+            lines.append(f"- ({weight_str}{valence_str}) {addr}{snippet}")
+
+        # valence summary
+        valences = [e.valence for e in top if e.valence != 0.0]
+        if valences:
+            avg_v = sum(valences) / len(valences)
+            sentiment = "positive" if avg_v > 0.2 else "negative" if avg_v < -0.2 else "neutral"
+            lines.append(f"\n_Recent formation context: mostly {sentiment} (avg valence {avg_v:+.2f})_")
+
+        content = "\n".join(lines)
+        wake_up_path = self.path / "wake_up.md"
+        wake_up_path.write_text(content)
+        return content
 
     def verify(self, memory_id: str) -> Optional[MemoryEntry]:
         """Mark a memory as verified against current state."""

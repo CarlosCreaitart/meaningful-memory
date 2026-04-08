@@ -28,11 +28,11 @@ from .reflection import (
     run_reflection, run_full_reflection,
     ReflectionReport, OrientationReport, SignalReport, ConsolidationReport,
 )
-from .resonance import compute_resonance, find_resonant_memories, ResonanceProfile
+from .resonance import compute_resonance, find_resonant_memories, ResonanceProfile, valence_signal
 from .pruning import prune_duplicates, PruneReport
 from .contradiction import detect_contradictions, ContradictionPair
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 __all__ = [
     "MeaningfulConfig",
     "default_config",
@@ -60,4 +60,5 @@ __all__ = [
     "PruneReport",
     "detect_contradictions",
     "ContradictionPair",
+    "valence_signal",
 ]

@@ -281,6 +281,23 @@ class ResonanceProfile:
         }
 
 
+def valence_signal(entry: MemoryEntry) -> float:
+    """
+    Emotional formation context as a resonance signal.
+
+    High-magnitude valence (strongly positive or negative at formation)
+    is a meta-signal that the memory mattered — emotionally charged
+    formation context correlates with significance.
+
+    From Anthropic's emotion vector research: suppressing these states
+    teaches deception. meaningful-memory honors them as signal instead.
+
+    Returns 0.0-0.1 (small weight, not dominant — valence amplifies
+    other signals rather than driving resonance alone).
+    """
+    return abs(entry.valence) * 0.1
+
+
 def compute_resonance(
     entry: MemoryEntry,
     all_entries: List[MemoryEntry],
@@ -304,6 +321,7 @@ def compute_resonance(
     ce = cascade_effect(entry, all_entries)
     cdh = cross_dimensional_harmony(entry)
     gp = gravitational_pull(entry, all_entries)
+    vs = valence_signal(entry)
 
     signals = [sc, ce, cdh, gp]
     active_signals = [s for s in signals if s > 0.2]
@@ -324,7 +342,8 @@ def compute_resonance(
         # single signal or no signal — no resonance
         composite = max(signals) * 0.3 if signals else 0.0
 
-    composite = min(1.0, composite)
+    # valence amplifies existing resonance slightly — small, not dominant
+    composite = min(1.0, composite + vs)
 
     # classify
     if composite >= 0.75:

@@ -84,6 +84,7 @@ class StoreConfig:
     max_active_memories: int = 500
     consolidation_trigger: float = 0.9
     auto_consolidate: bool = True
+    wake_up_top_n: int = 10
 
 
 @dataclass

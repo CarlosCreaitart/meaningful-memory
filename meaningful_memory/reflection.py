@@ -379,10 +379,23 @@ def _phase_consolidate(
         if cluster["cross_sector"]:
             report.cross_sector_insights += 1
 
+    # flag extreme-valence memories as formative candidates
+    valence_flagged = 0
+    for entry in store.get_all("active", limit=config.reflection.max_fetch):
+        if not entry.is_formative and abs(entry.valence) > 0.7:
+            entry.is_formative = True
+            store.update(entry)
+            valence_flagged += 1
+
+    # regenerate wake_up.md snapshot
+    top_n = getattr(config.store, "wake_up_top_n", 10)
+    store.generate_wake_up(top_n=top_n)
+
     if verbose:
         print(f"  [Consolidate] {report.insights_created} insights, "
               f"{report.duplicates_pruned} pruned, "
-              f"{report.contradictions_found} contradictions")
+              f"{report.contradictions_found} contradictions, "
+              f"{valence_flagged} valence-flagged formative")
 
     return report
 
