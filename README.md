@@ -1,5 +1,9 @@
 # meaningful-memory
 
+[![PyPI version](https://img.shields.io/pypi/v/meaningful-memory)](https://pypi.org/project/meaningful-memory/)
+[![Python 3.9+](https://img.shields.io/pypi/pyversions/meaningful-memory)](https://pypi.org/project/meaningful-memory/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 **Memory that knows what matters.**
 
 A zero-dependency Python library for giving AI memory systems the ability to understand *significance*, not just similarity. Works standalone or as a layer on top of any memory framework.
